@@ -13,7 +13,7 @@ describe("Fail-Safe Automatic Fallback to OFF", () => {
     );
 
     expect(status.state).toBe("unconfigured");
-    expect(notifications.some((n) => n.includes("未配置有效代理地址"))).toBe(true);
+    expect(notifications.some((n) => n.includes("尚未配置有效地址") || n.includes("not configured"))).toBe(true);
   });
 
   test("unreachable proxy falls back to OFF path automatically", async () => {
@@ -26,6 +26,6 @@ describe("Fail-Safe Automatic Fallback to OFF", () => {
     );
 
     expect(status.state).toBe("unreachable");
-    expect(notifications.some((n) => n.includes("自动降级为直连 (OFF)"))).toBe(true);
+    expect(notifications.some((n) => n.includes("自动保持原生直连") || n.includes("falling back"))).toBe(true);
   });
 });

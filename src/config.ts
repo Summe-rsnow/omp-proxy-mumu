@@ -4,15 +4,17 @@ import path from "node:path";
 import type { ProxyConfig } from "./types.js";
 
 /**
- * STRICT REQUIREMENT:
- * Zero default rules, zero default ports.
- * Unconfigured by default.
+ * Default configuration for omp-proxy-mumu:
+ * - off by default (enabled: false)
+ * - default host: 127.0.0.1 (localhost)
+ * - default port: 7890
  */
 export const DEFAULT_CONFIG: Readonly<ProxyConfig> = Object.freeze({
   enabled: false,
-  url: "",
+  url: "http://127.0.0.1:7890",
   injectChildEnv: true,
   probeTimeoutMs: 800,
+  lang: "auto",
   rules: {
     direct: [],
     proxy: [],
@@ -38,26 +40,33 @@ export function parseProxyUrl(rawUrl: string): { protocol: string; host: string;
   if (!trimmed) return null;
 
   try {
-    let urlToParse = trimmed;
-    const hasScheme = urlToParse.includes("://");
-    if (!hasScheme) {
-      urlToParse = `http://${urlToParse}`;
-    }
-    const parsed = new URL(urlToParse);
-    const protocol = parsed.protocol.replace(":", "").toLowerCase();
-    const host = parsed.hostname;
-    // Proxy endpoints must have an explicit port (e.g. 7890, 10808)
-    if (!parsed.port) {
+    const candidate = trimmed.includes("://") ? trimmed : `http://${trimmed}`;
+    const parsed = new URL(candidate);
+    const protocol = parsed.protocol.toLowerCase();
+    if (!protocol.startsWith("http") && !protocol.startsWith("socks")) {
       return null;
     }
-    const port = Number.parseInt(parsed.port, 10);
+
+    const host = parsed.hostname;
+    const port = parsed.port ? Number.parseInt(parsed.port, 10) : 0;
     if (!host || Number.isNaN(port) || port <= 0 || port > 65535) {
       return null;
     }
+
     return { protocol, host, port };
   } catch {
     return null;
   }
+}
+
+export function updateUrlPort(rawUrl: string, port: number): string {
+  const parsed = parseProxyUrl(rawUrl);
+  if (!parsed) {
+    return `http://127.0.0.1:${port}`;
+  }
+  const protocol = parsed.protocol || "http:";
+  const host = parsed.host || "127.0.0.1";
+  return `${protocol}//${host}:${port}`;
 }
 
 /**
@@ -78,9 +87,10 @@ export function loadConfig(): ProxyConfig {
       const parsed = JSON.parse(content) as Partial<ProxyConfig>;
       return {
         enabled: Boolean(parsed.enabled),
-        url: typeof parsed.url === "string" ? parsed.url.trim() : "",
-        injectChildEnv: parsed.injectChildEnv ?? true,
-        probeTimeoutMs: parsed.probeTimeoutMs && parsed.probeTimeoutMs > 100 ? parsed.probeTimeoutMs : 800,
+        url: typeof parsed.url === "string" && parsed.url.trim() ? parsed.url.trim() : DEFAULT_CONFIG.url,
+        injectChildEnv: parsed.injectChildEnv ?? DEFAULT_CONFIG.injectChildEnv,
+        probeTimeoutMs: parsed.probeTimeoutMs && parsed.probeTimeoutMs > 100 ? parsed.probeTimeoutMs : DEFAULT_CONFIG.probeTimeoutMs,
+        lang: parsed.lang === "zh" || parsed.lang === "en" || parsed.lang === "auto" ? parsed.lang : "auto",
         rules: {
           direct: Array.isArray(parsed.rules?.direct) ? parsed.rules.direct : [],
           proxy: Array.isArray(parsed.rules?.proxy) ? parsed.rules.proxy : [],
@@ -88,7 +98,7 @@ export function loadConfig(): ProxyConfig {
       };
     }
   } catch {
-    // Corrupted file -> fallback to clean zero-default
+    // Corrupted file -> fallback to clean default
   }
   return {
     ...DEFAULT_CONFIG,

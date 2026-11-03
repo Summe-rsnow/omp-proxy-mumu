@@ -1,19 +1,23 @@
 import type { ExtensionAPI, ExtensionCommandContext } from "@oh-my-pi/pi-coding-agent";
-import { DEFAULT_CONFIG, isConfigured, parseProxyUrl, saveConfig } from "./config.js";
+import { DEFAULT_CONFIG, isConfigured, parseProxyUrl, saveConfig, updateUrlPort } from "./config.js";
+import { resolveLanguage, t } from "./i18n.js";
 import { probeProxy } from "./probe.js";
 import type { ProxyInterceptor } from "./interceptor.js";
 
 export function registerProxyCommand(pi: ExtensionAPI, interceptor: ProxyInterceptor): void {
   pi.registerCommand("proxy", {
-    description: "管理与配置免 TUN 代理 (状态/开关/地址/测试/重置)",
+    description: "管理与配置免 TUN 代理 (状态/开关/地址/端口/测试/重置/语言)",
     getArgumentCompletions: (prefix: string) => {
+      const lang = resolveLanguage(interceptor.getConfig().lang);
       const subcommands = [
-        { value: "status", label: "status", description: "查看当前代理状态与连通性" },
-        { value: "on", label: "on", description: "开启代理 (若未配置或连不通则自动保持直连)" },
-        { value: "off", label: "off", description: "关闭代理 (完全原生直连)" },
-        { value: "set ", label: "set <url>", description: "设置代理地址 (如 http://127.0.0.1:7890 或 socks5://127.0.0.1:10808)" },
-        { value: "test", label: "test", description: "测试当前代理连通性与响应延迟" },
-        { value: "reset", label: "reset", description: "重置为纯净无预设状态 (清空配置)" },
+        { value: "status", label: "status", description: t(lang, "subStatusDesc") },
+        { value: "on", label: "on", description: t(lang, "subOnDesc") },
+        { value: "off", label: "off", description: t(lang, "subOffDesc") },
+        { value: "set ", label: "set <url>", description: t(lang, "subSetDesc") },
+        { value: "port ", label: "port <port>", description: t(lang, "subPortDesc") },
+        { value: "test", label: "test", description: t(lang, "subTestDesc") },
+        { value: "reset", label: "reset", description: t(lang, "subResetDesc") },
+        { value: "lang ", label: "lang <zh|en|auto>", description: t(lang, "subLangDesc") },
       ];
       const p = prefix.trim().toLowerCase();
       if (!p) return subcommands;
@@ -26,31 +30,31 @@ export function registerProxyCommand(pi: ExtensionAPI, interceptor: ProxyInterce
         ctx.ui?.notify(msg, level);
       };
 
+      const lang = resolveLanguage(interceptor.getConfig().lang);
+
       if (sub === "status" || sub === "") {
         const status = interceptor.getStatus();
         const cfg = interceptor.getConfig();
         const configured = isConfigured(cfg);
 
-        let stateText = "未知";
+        let stateText = t(lang, "stateDisabled");
         if (status.state === "active") {
-          stateText = `已启用 (Active) - 延迟: ${status.lastCheck?.latencyMs ?? 0}ms`;
+          stateText = `${t(lang, "stateActive")} (${status.lastCheck?.latencyMs ?? 0}ms)`;
         } else if (status.state === "unconfigured") {
-          stateText = "未配置 (Unconfigured) - 自动走直连 OFF 路径";
+          stateText = t(lang, "stateUnconfigured");
         } else if (status.state === "unreachable") {
-          stateText = `不可达 (Unreachable) - 自动走直连 OFF 路径 (${status.lastCheck?.error ?? "连接失败"})`;
-        } else {
-          stateText = "已停用 (Disabled) - 直连";
+          stateText = `${t(lang, "stateUnreachable")} (${status.lastCheck?.error ?? "failed"})`;
         }
 
         const lines = [
-          "━━━━━━━━━━━━━━━ [omp-proxy 状态] ━━━━━━━━━━━━━━━",
-          `• 开关状态: ${cfg.enabled ? "ON (开)" : "OFF (关)"}`,
-          `• 代理目标: ${configured ? cfg.url : "(未配置，纯净状态)"}`,
-          `• 运行模式: ${stateText}`,
-          `• 终端子进程注入: ${cfg.injectChildEnv ? "已启用" : "未启用"}`,
-          `• 直连规则数: ${cfg.rules.direct.length}，强制代理规则数: ${cfg.rules.proxy.length}`,
+          `━━━━━━━━━━━━━━━ [${t(lang, "statusTitle")}] ━━━━━━━━━━━━━━━`,
+          `• ${t(lang, "statusState")}: ${stateText}`,
+          `• ${t(lang, "statusTarget")}: ${configured ? cfg.url : "http://127.0.0.1:7890"}`,
+          `• ${t(lang, "statusChildEnv")}: ${cfg.injectChildEnv ? t(lang, "enabledText") : t(lang, "disabledText")}`,
+          `• ${t(lang, "statusDirectRules")}: ${cfg.rules.direct.length} ${t(lang, "itemCount")}`,
+          `• ${t(lang, "statusProxyRules")}: ${cfg.rules.proxy.length} ${t(lang, "itemCount")}`,
           "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
-          "常用指令: /proxy set <url> | /proxy on | /proxy off | /proxy test | /proxy reset",
+          "• /proxy on | /proxy off | /proxy port <port> | /proxy set <url> | /proxy test",
         ];
 
         notify(lines.join("\n"), status.state === "active" ? "info" : "warning");
@@ -61,11 +65,7 @@ export function registerProxyCommand(pi: ExtensionAPI, interceptor: ProxyInterce
         const currentCfg = interceptor.getConfig();
         currentCfg.enabled = true;
         saveConfig(currentCfg);
-
-        const newStatus = await interceptor.updateConfigAndApply(currentCfg, notify);
-        if (newStatus.state !== "active") {
-          notify("[omp-proxy] 代理已标记为开启，但由于未配置或连通失败，已自动保持直连 (OFF) 模式。", "warning");
-        }
+        await interceptor.updateConfigAndApply(currentCfg, notify);
         return;
       }
 
@@ -73,68 +73,110 @@ export function registerProxyCommand(pi: ExtensionAPI, interceptor: ProxyInterce
         const currentCfg = interceptor.getConfig();
         currentCfg.enabled = false;
         saveConfig(currentCfg);
-
-        await interceptor.updateConfigAndApply(currentCfg, notify);
-        notify("[omp-proxy] 代理已关闭，已切入完全原生直连模式。", "info");
+        await interceptor.updateConfigAndApply(currentCfg);
+        notify(`[omp-proxy-mumu] ${t(lang, "offSuccess")}`, "info");
         return;
       }
 
       if (sub === "set") {
-        const rawUrl = parts.slice(1).join(" ").trim();
-        if (!rawUrl) {
-          notify("[omp-proxy] 请提供代理地址，示例: /proxy set http://127.0.0.1:7890 或 /proxy set socks5://127.0.0.1:10808", "warning");
+        const rawTarget = parts.slice(1).join(" ").trim();
+        if (!rawTarget) {
+          notify(`[omp-proxy-mumu] ${t(lang, "setInvalid")}`, "error");
           return;
         }
 
-        const parsed = parseProxyUrl(rawUrl);
+        const parsed = parseProxyUrl(rawTarget);
         if (!parsed) {
-          notify(`[omp-proxy] 无效的代理格式: "${rawUrl}"。请提供协议和端口，如 http://127.0.0.1:7890`, "error");
+          notify(`[omp-proxy-mumu] ${t(lang, "setInvalid")}`, "error");
           return;
         }
 
-        const currentCfg = interceptor.getConfig();
-        currentCfg.url = `${parsed.protocol}://${parsed.host}:${parsed.port}`;
-        currentCfg.enabled = true;
-        saveConfig(currentCfg);
+        const normalizedUrl = `${parsed.protocol}//${parsed.host}:${parsed.port}`;
+        const newCfg = interceptor.getConfig();
+        newCfg.url = normalizedUrl;
+        newCfg.enabled = true;
 
-        notify(`[omp-proxy] 代理地址已更新为 ${currentCfg.url}，正在测试连通性...`, "info");
-        await interceptor.updateConfigAndApply(currentCfg, notify);
+        saveConfig(newCfg);
+        await interceptor.updateConfigAndApply(newCfg, notify);
+        return;
+      }
+
+      if (sub === "port") {
+        const portStr = parts[1];
+        if (!portStr) {
+          notify(`[omp-proxy-mumu] ${t(lang, "portMissing")}`, "error");
+          return;
+        }
+
+        const portNum = Number.parseInt(portStr, 10);
+        if (Number.isNaN(portNum) || portNum < 1 || portNum > 65535) {
+          notify(`[omp-proxy-mumu] ${t(lang, "portInvalid")}`, "error");
+          return;
+        }
+
+        const newCfg = interceptor.getConfig();
+        newCfg.url = updateUrlPort(newCfg.url, portNum);
+        newCfg.enabled = true;
+
+        saveConfig(newCfg);
+        await interceptor.updateConfigAndApply(newCfg, notify);
         return;
       }
 
       if (sub === "test") {
-        const currentCfg = interceptor.getConfig();
-        if (!isConfigured(currentCfg)) {
-          notify("[omp-proxy] 当前未配置代理地址，无法测试。请先使用 /proxy set <url> 设置。", "warning");
+        const cfg = interceptor.getConfig();
+        if (!cfg.url) {
+          notify(`[omp-proxy-mumu] ${t(lang, "onUnconfigured")}`, "warning");
           return;
         }
 
-        notify(`[omp-proxy] 正在探测目标代理 ${currentCfg.url} ...`, "info");
-        const res = await probeProxy(currentCfg.url, currentCfg.probeTimeoutMs);
+        notify(`[omp-proxy-mumu] ${t(lang, "testStart", { url: cfg.url })}`, "info");
+        const res = await probeProxy(cfg.url, cfg.probeTimeoutMs, true);
         if (res.ok) {
-          notify(`[omp-proxy] 探测成功！响应延迟: ${res.latencyMs}ms。代理工作正常。`, "info");
+          notify(`[omp-proxy-mumu] ${t(lang, "testSuccess", { url: cfg.url, latency: res.latencyMs })}`, "info");
         } else {
-          notify(`[omp-proxy] 探测失败！错误: ${res.error}。系统将继续走直连 (OFF) 路径。`, "error");
+          notify(`[omp-proxy-mumu] ${t(lang, "testFailed", { url: cfg.url, error: res.error || "failed" })}`, "error");
         }
         return;
       }
 
       if (sub === "reset") {
-        const cleanConfig = { ...DEFAULT_CONFIG, rules: { direct: [], proxy: [] } };
-        saveConfig(cleanConfig);
-        await interceptor.updateConfigAndApply(cleanConfig, notify);
-        notify("[omp-proxy] 配置已清空重置为初始纯净状态 (留白未配置，自动直连)。", "info");
+        const resetCfg = {
+          ...DEFAULT_CONFIG,
+          rules: { direct: [], proxy: [] },
+        };
+        saveConfig(resetCfg);
+        await interceptor.updateConfigAndApply(resetCfg);
+        notify(`[omp-proxy-mumu] ${t(lang, "resetSuccess")}`, "info");
+        return;
+      }
+
+      if (sub === "lang") {
+        const targetLang = parts[1]?.toLowerCase();
+        if (targetLang !== "zh" && targetLang !== "en" && targetLang !== "auto") {
+          notify(`[omp-proxy-mumu] ${t(lang, "langInvalid")}`, "error");
+          return;
+        }
+
+        const cfg = interceptor.getConfig();
+        cfg.lang = targetLang;
+        saveConfig(cfg);
+        await interceptor.updateConfigAndApply(cfg);
+        const resolved = resolveLanguage(targetLang);
+        notify(`[omp-proxy-mumu] ${t(resolved, "langSuccess", { lang: targetLang })}`, "info");
         return;
       }
 
       notify(
-        "[omp-proxy] 未知子指令。可用指令:\n" +
-          "• /proxy status  - 查看状态\n" +
-          "• /proxy on      - 开启代理\n" +
-          "• /proxy off     - 关闭代理\n" +
-          "• /proxy set <url> - 设置代理地址\n" +
-          "• /proxy test    - 测试连通性\n" +
-          "• /proxy reset   - 重置清空配置",
+        `${t(lang, "helpTitle")}\n` +
+          `${t(lang, "helpStatus")}\n` +
+          `${t(lang, "helpOn")}\n` +
+          `${t(lang, "helpOff")}\n` +
+          `${t(lang, "helpSet")}\n` +
+          `${t(lang, "helpPort")}\n` +
+          `${t(lang, "helpTest")}\n` +
+          `${t(lang, "helpReset")}\n` +
+          `${t(lang, "helpLang")}`,
         "warning",
       );
     },

@@ -31,6 +31,6 @@ describe("Proxy Health Probe", () => {
   test("probeProxy fails immediately on invalid url", async () => {
     const result = await probeProxy("", 200);
     expect(result.ok).toBe(false);
-    expect(result.error).toContain("未配置");
+    expect(result.error).toContain("invalid proxy url");
   });
 });

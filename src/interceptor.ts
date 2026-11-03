@@ -1,8 +1,8 @@
 import { isConfigured, parseProxyUrl } from "./config.js";
+import { resolveLanguage, t } from "./i18n.js";
 import { probeProxy } from "./probe.js";
 import { clearRouteCache, shouldProxyHost, TunnelManager } from "./tunnel.js";
 import type { ProxyConfig, ProxyRuntimeStatus } from "./types.js";
-
 type ProxiedInit = RequestInit & { proxy?: string };
 
 /**
@@ -58,11 +58,28 @@ export class ProxyInterceptor {
   private isHooked = false;
   // Fast-path boolean: false means every fetch goes straight to the native implementation.
   private isActive = false;
+  private listeners: Array<(status: ProxyRuntimeStatus) => void> = [];
 
   constructor(config: ProxyConfig) {
     this.config = config;
   }
 
+  onStatusChange(fn: (status: ProxyRuntimeStatus) => void): () => void {
+    this.listeners.push(fn);
+    return () => {
+      this.listeners = this.listeners.filter((l) => l !== fn);
+    };
+  }
+
+  private notifyListeners(): void {
+    for (const listener of this.listeners) {
+      try {
+        listener(this.status);
+      } catch {
+        // ignore listener errors
+      }
+    }
+  }
   getStatus(): ProxyRuntimeStatus {
     return { ...this.status };
   }
@@ -89,6 +106,7 @@ export class ProxyInterceptor {
   ): Promise<ProxyRuntimeStatus> {
     this.config = newConfig;
     clearRouteCache();
+    const lang = resolveLanguage(newConfig.lang);
 
     if (!newConfig.enabled) {
       this.isActive = false;
@@ -99,6 +117,7 @@ export class ProxyInterceptor {
       };
       this.syncChildProcessEnv(false);
       await this.tunnelManager.stop();
+      this.notifyListeners();
       return this.status;
     }
 
@@ -111,8 +130,9 @@ export class ProxyInterceptor {
       };
       this.syncChildProcessEnv(false);
       await this.tunnelManager.stop();
+      this.notifyListeners();
       notifyFn?.(
-        "[omp-proxy] 代理开关已打开，但尚未配置有效代理地址，已自动保持直连 (OFF) 路径。",
+        `[omp-proxy-mumu] ${t(lang, "onUnconfigured")}`,
         "warning",
       );
       return this.status;
@@ -130,8 +150,9 @@ export class ProxyInterceptor {
       this.status.configuredUrl = newConfig.url;
       this.syncChildProcessEnv(false);
       await this.tunnelManager.stop();
+      this.notifyListeners();
       notifyFn?.(
-        `[omp-proxy] 代理目标不可达 (${checkResult.error || "连接失败"})，已自动降级为直连 (OFF) 路径。`,
+        `[omp-proxy-mumu] ${t(lang, "onUnreachable", { url: newConfig.url, error: checkResult.error || "failed" })}`,
         "warning",
       );
       return this.status;
@@ -147,8 +168,9 @@ export class ProxyInterceptor {
       lastCheckTime: Date.now(),
     };
     this.syncChildProcessEnv(newConfig.injectChildEnv);
+    this.notifyListeners();
     notifyFn?.(
-      `[omp-proxy] 代理已启用并已连通: ${newConfig.url} (延迟 ${checkResult.latencyMs}ms)`,
+      `[omp-proxy-mumu] ${t(lang, "onActive", { url: newConfig.url, latency: checkResult.latencyMs })}`,
       "info",
     );
     return this.status;
@@ -227,7 +249,9 @@ export class ProxyInterceptor {
     globalThis.fetch = this.originalFetch;
     this.isHooked = false;
     this.isActive = false;
+    this.status = { state: "disabled", configuredUrl: "", enabled: false };
     this.syncChildProcessEnv(false);
     this.tunnelManager.stop().catch(() => {});
+    this.notifyListeners();
   }
 }

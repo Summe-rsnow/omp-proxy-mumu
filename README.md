@@ -4,19 +4,21 @@
 
 - 宿主兼容：Oh My Pi `>=18.0.4 <19`
 - 运行时：Bun `>=1.3.0`
-- 默认状态：**未配置、未启用、零规则、零端口**
+- 默认状态：**关闭（off）、`http://127.0.0.1:7890`、零规则**
 - 开源许可：GPL-3.0
 
 ## 核心特性
 
 | 特性 | 说明 |
 | --- | --- |
-| **零默认，纯 Opt-in** | 首次安装不写入任何端口、预设或分流规则；未显式配置前，插件不存在可用的代理路径。 |
+| **开箱可用，默认关闭** | 默认地址 `http://127.0.0.1:7890`，但不写任何分流规则；`enabled = false` 时永远不会代理流量。 |
 | **失败安全自动回退** | 开关已打开但地址无效，或 TCP 探测失败时，状态标记为 `unconfigured` / `unreachable`，流量自动走原生直连（OFF）。 |
 | **HTTP 与 SOCKS5** | 支持 `http://` 代理直通，也支持 `socks5://`；SOCKS5 由内置的本地 HTTP CONNECT 桥按需转换。 |
 | **极致性能** | 关闭状态下仅一次布尔判断即返回原生 `fetch`；路由决策 O(1) 缓存；SOCKS5 桥懒启动；探测结果短 TTL 缓存。 |
 | **规则分流** | 支持直连白名单与强制代理列表，支持 `*.example.com` 通配；loopback 永不代理。 |
 | **子进程代理注入** | 激活时向工具派生的子进程注入 `HTTP_PROXY` / `HTTPS_PROXY` / `ALL_PROXY`（含小写形式），关闭时同步清理。 |
+| **多语言** | 内置简体中文与英文两套提示；支持 `/proxy lang zh|en|auto` 即时切换，`auto` 跟随系统 locale。 |
+| **状态栏指示** | 代理激活时在 OMP 状态栏显示 `● PROXY ON`，关闭或降级直连时自动清除。 |
 | **无遥测** | 除代理转发与本地 TCP 探测外，不发起额外网络请求，不上报任何配置或使用数据。 |
 
 ## 工作原理
@@ -89,23 +91,26 @@ omp plugin install github:Summe-rsnow/omp-proxy-mumu
 | --- | --- |
 | `/proxy` 或 `/proxy status` | 查看开关、代理目标、运行状态、子进程注入状态与规则数量。 |
 | `/proxy set <url>` | 设置并规范化代理地址，写入配置，自动开启并立即探测。 |
+| `/proxy port <port>` | 仅替换端口，保留当前协议与主机，例如 `/proxy port 10808`。 |
 | `/proxy on` | 打开开关；若未配置或探测失败，仍保持直连并给出警告。 |
 | `/proxy off` | 关闭代理，恢复完全原生直连，并清理子进程代理变量。 |
 | `/proxy test` | 对当前代理端点做 TCP 连通性与延迟测试。 |
-| `/proxy reset` | 清空全部配置，恢复零默认、未配置的初始状态。 |
+| `/proxy reset` | 恢复默认配置：`http://127.0.0.1:7890`，`enabled = false`，规则清空。 |
+| `/proxy lang <zh\|en\|auto>` | 切换提示语言；`auto` 按环境 locale 自动判定。 |
 
 地址必须包含显式端口；省略协议时按 `http://` 处理。
 
 常见示例：
 
 ```text
+/proxy port 7890
 /proxy set http://127.0.0.1:7890
 /proxy set socks5://127.0.0.1:10808
 /proxy test
 /proxy status
 ```
 
-> 上述端口仅是示例。本项目不内置任何默认端口，也不会猜测本机代理软件。
+> 默认端口为 `7890`（Clash 常用），只作为初始值存在；插件不会主动探测或猜测本机代理软件。
 
 ### 状态说明
 
@@ -129,9 +134,10 @@ omp plugin install github:Summe-rsnow/omp-proxy-mumu
 ```json
 {
   "enabled": false,
-  "url": "",
+  "url": "http://127.0.0.1:7890",
   "injectChildEnv": true,
   "probeTimeoutMs": 800,
+  "lang": "auto",
   "rules": {
     "direct": [],
     "proxy": []
@@ -142,9 +148,10 @@ omp plugin install github:Summe-rsnow/omp-proxy-mumu
 | 字段 | 默认值 | 说明 |
 | --- | --- | --- |
 | `enabled` | `false` | 总开关。开启不等于生效，仍需地址有效且探测成功。 |
-| `url` | `""` | 代理地址，例如 `http://127.0.0.1:7890`、`socks5://127.0.0.1:10808`。 |
+| `url` | `"http://127.0.0.1:7890"` | 代理地址，例如 `http://127.0.0.1:7890`、`socks5://127.0.0.1:10808`。 |
 | `injectChildEnv` | `true` | 激活时是否向子进程注入代理环境变量。 |
 | `probeTimeoutMs` | `800` | TCP 探测超时，单位毫秒。 |
+| `lang` | `"auto"` | 提示语言：`"zh"`、`"en"` 或 `"auto"`（跟随系统 locale）。 |
 | `rules.direct` | `[]` | 直连白名单。命中后即使位于代理列表也不代理。 |
 | `rules.proxy` | `[]` | 强制代理列表。非空时，未命中的域名改为直连。 |
 
@@ -199,20 +206,41 @@ omp plugin install github:Summe-rsnow/omp-proxy-mumu
 ## 开发
 
 ```sh
-# 运行单元测试
-bun run test
+# 安装依赖（首次）
+bun install
 
-# 或直接进入 app 目录
-cd app
+# 运行单元测试
 bun test
+
+# 类型检查 + 测试
+bun run check
 ```
 
-测试覆盖零默认配置、配置门禁、URL 解析、失败回退与 TCP 探测。插件内部结构、模块职责和数据流见 [`app/README.md`](./app/README.md)。
+测试覆盖默认配置与门禁、URL 解析、端口改写、i18n 文案、失败回退与 TCP 探测。目录结构：
+
+```text
+src/
+├── index.ts        # Extension 入口、状态栏指示、会话生命周期
+├── config.ts       # 默认配置、持久化、URL 解析、端口改写
+├── types.ts        # 配置、状态与探测结果类型
+├── i18n.ts         # 简体中文 / 英文文案与语言解析
+├── probe.ts        # TCP 连通性探测
+├── interceptor.ts  # fetch Hook、状态机、失败回退、环境变量注入
+├── tunnel.ts       # 路由决策缓存与 HTTP→SOCKS5 桥
+└── command.ts      # /proxy 斜杠命令
+test/
+├── config.test.ts
+├── port.test.ts
+├── i18n.test.ts
+├── fallback.test.ts
+├── probe.test.ts
+└── perf.test.ts
+```
 
 ## 许可证与致谢
 
 本项目以 **GPL-3.0** 分发。
 
-代理思路与行为参考自 [hcllmsx/proxy-aiapp](https://github.com/hcllmsx/proxy-aiapp)（Proxy-AiApp，GPL-3.0）；上游源码以只读快照保存在 [`upstream/`](./upstream/)，同步方式与许可证义务见 [`UPSTREAM.md`](./UPSTREAM.md)。
+代理思路与行为参考自 [hcllmsx/proxy-aiapp](https://github.com/hcllmsx/proxy-aiapp)（Proxy-AiApp，GPL-3.0）；上游源码以只读快照保存在仓库外的 `../upstream/`，同步方式与许可证义务见其中的 `UPSTREAM.md`。
 
 上游本身衍生自 [yuaotian/antigravity-proxy](https://github.com/yuaotian/antigravity-proxy)，一并致谢。

@@ -31,7 +31,7 @@ export async function probeProxy(
     const res: HealthCheckResult = {
       ok: false,
       latencyMs: 0,
-      error: "未配置有效的代理地址 (格式示例: http://127.0.0.1:7890 或 socks5://127.0.0.1:10808)",
+      error: "invalid proxy url (expected http://host:port or socks5://host:port)",
     };
     lastProbeCache = { url: rawUrl, result: res, timestamp: now };
     return res;
@@ -65,11 +65,11 @@ export async function probeProxy(
   });
 
   socket.on("timeout", () => {
-    finish(false, `连接超时 (${timeoutMs}ms 未响应)`);
+    finish(false, `timeout after ${timeoutMs}ms`);
   });
 
   socket.on("error", (err: Error) => {
-    finish(false, `连接失败: ${err.message}`);
+    finish(false, err.message);
   });
 
   return promise;
