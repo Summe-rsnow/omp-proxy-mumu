@@ -2,7 +2,7 @@
 
 为 [Oh My Pi](https://github.com/can1357/oh-my-pi) 提供**免 TUN 的透明 AI 网络代理**。插件直接在 OMP 宿主进程内接管网络请求，不改系统代理、不注入 DLL、不需要管理员权限；代理未配置或目标不可达时自动回退原生直连。
 
-- 当前版本：`0.2.0`
+- 当前版本：`0.2.1`
 - 宿主兼容：Oh My Pi `>=18.0.4 <19`（当前验证 `18.16.0`）
 - 运行时：Bun `>=1.3.0`
 - 默认状态：**关闭（off）、`http://127.0.0.1:7890`、零规则**
@@ -14,7 +14,9 @@
 | --- | --- |
 | **开箱可用，默认关闭** | 默认地址 `http://127.0.0.1:7890`，但不写任何分流规则；`enabled = false` 时永远不会代理流量。 |
 | **失败安全自动回退** | 开关已打开但地址无效，或 TCP 探测失败时，状态标记为 `unconfigured` / `unreachable`，流量自动走原生直连（OFF）。 |
-| **HTTP 与 SOCKS5** | 支持 `http://` 代理直通，也支持 `socks5://`；SOCKS5 由内置的本地 HTTP CONNECT 桥按需转换。 |
+| **运行期失败提示与降级** | 代理中途失败时给出明确告警并自动回退原生直连；Bun 拒绝该代理协议时标记 `degraded` 并停止代理，不再让每个请求报错。 |
+| **环境变量自愈** | 启动时清理无法使用的 `HTTP_PROXY` / `HTTPS_PROXY` / `ALL_PROXY`（socks 或格式错误），避免 Bun `fetch` 对所有请求抛 `UnsupportedProxyProtocol`。 |
+| **HTTP 与 SOCKS5** | 支持 `http://` 代理直通，也支持 `socks5://`；SOCKS5 由内置的本地 HTTP 桥转换，HTTPS 走 `CONNECT`、明文 HTTP 走绝对 URI 转发。 |
 | **极致性能** | 关闭状态下仅一次布尔判断即返回原生 `fetch`；路由决策 O(1) 缓存；SOCKS5 桥懒启动；探测结果短 TTL 缓存。 |
 | **规则分流** | 支持直连白名单与强制代理列表，支持 `*.example.com` 通配；loopback 永不代理。 |
 | **子进程代理注入** | 激活时向工具派生的子进程注入 `HTTP_PROXY` / `HTTPS_PROXY` / `ALL_PROXY`（含小写形式），关闭时同步清理。 |
@@ -36,16 +38,25 @@ globalThis.fetch(input, init)
         ├─ 代理未激活 ──────────────────► 原生 fetch（零额外开销）
         │
         └─ 提取 hostname
-                ├─ loopback / 直连规则 ─► 原生 fetch
+                ├─ loopback / 直连规则 ─► 原生 fetch（proxy: false，忽略环境变量代理）
                 └─ 需要代理
                         ├─ http://  ──► 直接作为 fetch proxy
-                        └─ socks5:// ─► 懒启动本地 CONNECT 桥
+                        └─ socks5:// ─► 懒启动本地 HTTP 桥（CONNECT + 明文 HTTP）
                         │
                         ▼
-                代理请求失败 ─────────► 自动重试原生直连
+                代理请求失败 ─────────► 告警 + 重试原生直连（proxy: false）
 ```
 
 插件只影响当前 Oh My Pi 进程内的 `fetch` 调用，以及通过工具派生的子进程环境变量；它不创建虚拟网卡，也不接管操作系统或其他应用的流量。
+
+### 环境变量自愈与降级
+
+Bun 内置 `fetch` 会读取 `HTTP_PROXY` / `HTTPS_PROXY` / `ALL_PROXY`，并且只支持 http/https 代理。环境里残留 `socks5://...` 或格式错误的值（例如 `http:://127.0.0.1:7890`）时，**所有**请求都会直接抛 `UnsupportedProxyProtocol`，与插件配置无关。插件的处理方式：
+
+1. 安装 Hook 时快照并清理这类不可用的环境变量，会话开始时给出一次告警。
+2. 激活代理时只写入规范化的 http(s) 地址；socks 配置写入本地桥地址，子进程同样可用。
+3. 被 Bun 拒绝代理协议或桥接无法启动时，状态变为 `degraded`、清空注入的环境变量并停止代理，后续请求全部直连。
+4. 单次代理请求失败时，告警一次并立即用 `proxy: false` 重试原生直连；两者都失败才向调用方报错，错误信息同时包含代理与直连的失败原因。
 
 ## 安装
 
@@ -121,6 +132,7 @@ omp plugin install github:Summe-rsnow/omp-proxy-mumu
 | `disabled` | `enabled = false` | 原生直连 |
 | `unconfigured` | 已开启，但地址为空或缺少有效 host/port | 自动直连 |
 | `unreachable` | 已开启且地址有效，但 TCP 探测失败 | 自动直连 |
+| `degraded` | 代理被 Bun 拒绝（协议不支持）或 SOCKS5 桥启动失败 | 已停止代理，全部直连；`/proxy status` 显示降级原因 |
 
 ## 配置文件
 

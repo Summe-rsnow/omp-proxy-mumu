@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.1
+
+- 修复：环境里残留 socks 或格式错误的 `HTTP_PROXY` / `HTTPS_PROXY` / `ALL_PROXY` 会让 Bun `fetch` 对所有请求抛 `UnsupportedProxyProtocol`（“Retry failed after 1 attempts”）。插件安装 Hook 时快照并清理这类值，会话开始时告警一次，卸载或关闭时只恢复可用的原值。
+- 修复：直连路径（loopback、直连规则、回退重试）改用 `proxy: false`，注入的子进程代理变量不再把直连请求也送进代理。
+- 新增：`degraded` 运行状态。代理协议被 Bun 拒绝或 SOCKS5 桥无法启动时，停止代理、清理注入变量，并在 `/proxy status` 显示降级原因。
+- 新增：单次代理请求失败会告警一次并立即回退原生直连；两者都失败时抛出同时包含代理与直连原因的错误。请求体不可重放（流式 body / `Request`）时不重试，避免重复提交。
+- 修复：SOCKS5 桥现在同时转发 `CONNECT`（HTTPS）与明文 HTTP 绝对 URI（此前明文请求会收到 405 文本并被当作正常响应）；桥失败时返回 `x-omp-proxy-error` 标记，由插件识别并回退。
+- 修复：代理地址规范化统一走 `URL` 解析，避免拼出 `http:://host:port` 这类非法值；IPv6 端点保留括号。
+- 新增测试：环境变量自愈、SOCKS5 桥明文/CONNECT 转发、桥失败标记。
+
 ## 0.2.0
 
 - 新增 i18n：内置简体中文与英文提示，`/proxy lang <zh|en|auto>` 即时切换，`auto` 跟随系统 locale。

@@ -1,5 +1,6 @@
 import type { ExtensionContext, ExtensionFactory } from "@oh-my-pi/pi-coding-agent";
 import { loadConfig } from "./config.js";
+import { resolveLanguage, t } from "./i18n.js";
 import { ProxyInterceptor } from "./interceptor.js";
 import { registerProxyCommand } from "./command.js";
 
@@ -37,9 +38,21 @@ const extension: ExtensionFactory = (pi) => {
 
   // Hook session lifecycle
   let hasCheckedThisSession = false;
+  let hasReportedEnvIssues = false;
 
   pi.on("session_start", async (_event, ctx) => {
     currentUi = ctx.ui;
+    interceptor.setNotifier((msg, level) => ctx.ui?.notify(msg, level));
+
+    if (!hasReportedEnvIssues) {
+      hasReportedEnvIssues = true;
+      const issues = interceptor.getEnvIssues();
+      if (issues.length > 0) {
+        const lang = resolveLanguage(interceptor.getConfig().lang);
+        const list = issues.map((issue) => `${issue.key}=${issue.value}`).join(", ");
+        ctx.ui?.notify(`[omp-proxy-mumu] ${t(lang, "envSanitized", { list })}`, "warning");
+      }
+    }
 
     if (hasCheckedThisSession) {
       updateStatusBar(currentUi);

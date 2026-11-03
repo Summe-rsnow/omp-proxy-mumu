@@ -29,7 +29,7 @@ export interface HealthCheckResult {
   error?: string;
 }
 
-export type ProxyState = "disabled" | "unconfigured" | "unreachable" | "active";
+export type ProxyState = "disabled" | "unconfigured" | "unreachable" | "active" | "degraded";
 
 export interface ProxyRuntimeStatus {
   state: ProxyState;
@@ -37,4 +37,6 @@ export interface ProxyRuntimeStatus {
   enabled: boolean;
   lastCheck?: HealthCheckResult;
   lastCheckTime?: number;
+  /** Human-readable reason for the last runtime downgrade (state === "degraded"). */
+  lastError?: string;
 }

@@ -1,6 +1,6 @@
 {
   "name": "omp-proxy-mumu",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Transparent AI proxy plugin for Oh My Pi with fail-safe zero-config bypass",
   "type": "module",
   "license": "GPL-3.0",

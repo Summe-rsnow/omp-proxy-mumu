@@ -44,11 +44,16 @@ export function registerProxyCommand(pi: ExtensionAPI, interceptor: ProxyInterce
           stateText = t(lang, "stateUnconfigured");
         } else if (status.state === "unreachable") {
           stateText = `${t(lang, "stateUnreachable")} (${status.lastCheck?.error ?? "failed"})`;
+        } else if (status.state === "degraded") {
+          stateText = t(lang, "stateDegraded");
         }
 
         const lines = [
           `━━━━━━━━━━━━━━━ [${t(lang, "statusTitle")}] ━━━━━━━━━━━━━━━`,
           `• ${t(lang, "statusState")}: ${stateText}`,
+          ...(status.state === "degraded" && status.lastError
+            ? [`• ${t(lang, "statusLastError")}: ${status.lastError}`]
+            : []),
           `• ${t(lang, "statusTarget")}: ${configured ? cfg.url : "http://127.0.0.1:7890"}`,
           `• ${t(lang, "statusChildEnv")}: ${cfg.injectChildEnv ? t(lang, "enabledText") : t(lang, "disabledText")}`,
           `• ${t(lang, "statusDirectRules")}: ${cfg.rules.direct.length} ${t(lang, "itemCount")}`,
