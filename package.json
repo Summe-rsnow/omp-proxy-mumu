@@ -24,6 +24,7 @@
   "files": [
     "src",
     "README.md",
+    "CHANGELOG.md",
     "LICENSE"
   ],
   "scripts": {
@@ -40,7 +41,7 @@
     "@oh-my-pi/pi-coding-agent": ">=18.0.4 <19"
   },
   "devDependencies": {
-    "@oh-my-pi/pi-coding-agent": "18.14.1",
+    "@oh-my-pi/pi-coding-agent": "18.16.0",
     "@types/bun": "latest",
     "typescript": "5.9.2"
   },
