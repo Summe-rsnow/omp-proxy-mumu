@@ -348,6 +348,36 @@ export class ProxyInterceptor {
     } catch (err) {
       proxyError = err;
     }
+    // Never retry or fallback if caller's signal was already aborted
+    if (init?.signal?.aborted) {
+      throw proxyError;
+    }
+
+    if (PROTOCOL_ERROR_CODES[errorCode(proxyError)] === true) {
+      // The runtime refused the scheme; the inherited env may be the cause.
+      sanitizeInheritedProxyEnv();
+      this.degrade("protocol", proxyError, lang);
+    }
+
+    // Direct fallback is disabled by default to prevent leaking real IP to AI providers
+    // (which triggers region blocks like "User location is not supported for the API use").
+    if (!this.config.directFallback) {
+      this.notifyThrottled(
+        "proxyFail",
+        `[omp-proxy-mumu] ${t(lang, "proxyFailed", {
+          url: this.config.url,
+          error: errorMessage(proxyError),
+        })}`,
+        "error",
+      );
+      throw new Error(
+        `[omp-proxy-mumu] ${t(lang, "proxyFailed", {
+          url: this.config.url,
+          error: errorMessage(proxyError),
+        })}`,
+        { cause: proxyError },
+      );
+    }
 
     if (!replayable) {
       // Resending a consumed stream would duplicate a partial upload.
@@ -362,21 +392,14 @@ export class ProxyInterceptor {
       throw proxyError;
     }
 
-    if (PROTOCOL_ERROR_CODES[errorCode(proxyError)] === true) {
-      // The runtime refused the scheme; the inherited env may be the cause.
-      sanitizeInheritedProxyEnv();
-      this.degrade("protocol", proxyError, lang);
-    } else {
-      this.notifyThrottled(
-        "fallback",
-        `[omp-proxy-mumu] ${t(lang, "proxyFallback", {
-          url: this.config.url,
-          error: errorMessage(proxyError),
-        })}`,
-        "warning",
-      );
-    }
-
+    this.notifyThrottled(
+      "fallback",
+      `[omp-proxy-mumu] ${t(lang, "proxyFallback", {
+        url: this.config.url,
+        error: errorMessage(proxyError),
+      })}`,
+      "warning",
+    );
     // FAIL-SAFE: fall back to the native direct path (`proxy: false` keeps the
     // injected env from dragging the retry through the failing proxy again).
     try {

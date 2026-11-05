@@ -13,12 +13,13 @@ export const DEFAULT_CONFIG: Readonly<ProxyConfig> = Object.freeze({
   enabled: false,
   url: "http://127.0.0.1:7890",
   injectChildEnv: true,
-  probeTimeoutMs: 800,
+  probeTimeoutMs: 1500,
   lang: "auto",
   rules: {
     direct: [],
     proxy: [],
   },
+  directFallback: false,
 });
 
 let cachedConfigPath: string | null = null;
@@ -95,6 +96,7 @@ export function loadConfig(): ProxyConfig {
           direct: Array.isArray(parsed.rules?.direct) ? parsed.rules.direct : [],
           proxy: Array.isArray(parsed.rules?.proxy) ? parsed.rules.proxy : [],
         },
+        directFallback: Boolean(parsed.directFallback),
       };
     }
   } catch {

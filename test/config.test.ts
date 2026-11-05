@@ -8,6 +8,8 @@ describe("Proxy Config & Gate Rules", () => {
     expect(DEFAULT_CONFIG.lang).toBe("auto");
     expect(DEFAULT_CONFIG.rules.direct.length).toBe(0);
     expect(DEFAULT_CONFIG.rules.proxy.length).toBe(0);
+    expect(DEFAULT_CONFIG.probeTimeoutMs).toBe(1500);
+    expect(DEFAULT_CONFIG.directFallback).toBe(false);
     expect(isConfigured(DEFAULT_CONFIG)).toBe(true);
   });
 

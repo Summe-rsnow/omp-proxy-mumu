@@ -4,9 +4,11 @@ export const PROXY_ENV_KEYS = [
   "HTTP_PROXY",
   "HTTPS_PROXY",
   "ALL_PROXY",
+  "PI_PROXY",
   "http_proxy",
   "https_proxy",
   "all_proxy",
+  "pi_proxy",
 ] as const;
 
 export type ProxyEnvKey = (typeof PROXY_ENV_KEYS)[number];

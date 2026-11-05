@@ -58,6 +58,7 @@ export function registerProxyCommand(pi: ExtensionAPI, interceptor: ProxyInterce
           `• ${t(lang, "statusChildEnv")}: ${cfg.injectChildEnv ? t(lang, "enabledText") : t(lang, "disabledText")}`,
           `• ${t(lang, "statusDirectRules")}: ${cfg.rules.direct.length} ${t(lang, "itemCount")}`,
           `• ${t(lang, "statusProxyRules")}: ${cfg.rules.proxy.length} ${t(lang, "itemCount")}`,
+          `• ${t(lang, "statusDirectFallback")}: ${cfg.directFallback ? t(lang, "enabledText") : t(lang, "disabledText")}`,
           "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
           "• /proxy on | /proxy off | /proxy port <port> | /proxy set <url> | /proxy test",
         ];

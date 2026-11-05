@@ -13,14 +13,21 @@ export interface ProxyConfig {
    * Default: "http://127.0.0.1:7890".
    */
   url: string;
-  /** Whether to inject HTTP_PROXY/HTTPS_PROXY/ALL_PROXY into child processes (bash tool). */
+  /** Whether to inject HTTP_PROXY/HTTPS_PROXY/ALL_PROXY/PI_PROXY into child processes (bash tool). */
   injectChildEnv: boolean;
-  /** Timeout in milliseconds for probe health-checks. Default 800ms. */
+  /** Timeout in milliseconds for probe health-checks. Default 1500ms. */
   probeTimeoutMs: number;
   /** Preferred language for notifications and command help: "zh" | "en" | "auto". Default "auto". */
   lang: SupportedLang;
   /** Routing rules. Blank by default. */
   rules: ProxyRules;
+  /**
+   * Whether to fall back to direct connection when a proxied request fails.
+   * Default: false.
+   * When false, failed proxy requests throw immediately to avoid leaking the real IP
+   * to geo-blocked AI providers (e.g. Google 400 "User location is not supported").
+   */
+  directFallback?: boolean;
 }
 
 export interface HealthCheckResult {

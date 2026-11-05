@@ -2,7 +2,7 @@
 
 为 [Oh My Pi](https://github.com/can1357/oh-my-pi) 提供**免 TUN 的透明 AI 网络代理**。插件直接在 OMP 宿主进程内接管网络请求，不改系统代理、不注入 DLL、不需要管理员权限；代理未配置或目标不可达时自动回退原生直连。
 
-- 当前版本：`0.2.1`
+- 当前版本：`0.2.2`
 - 宿主兼容：Oh My Pi `>=18.0.4 <19`（当前验证 `18.16.0`）
 - 运行时：Bun `>=1.3.0`
 - 默认状态：**关闭（off）、`http://127.0.0.1:7890`、零规则**
@@ -19,7 +19,7 @@
 | **HTTP 与 SOCKS5** | 支持 `http://` 代理直通，也支持 `socks5://`；SOCKS5 由内置的本地 HTTP 桥转换，HTTPS 走 `CONNECT`、明文 HTTP 走绝对 URI 转发。 |
 | **极致性能** | 关闭状态下仅一次布尔判断即返回原生 `fetch`；路由决策 O(1) 缓存；SOCKS5 桥懒启动；探测结果短 TTL 缓存。 |
 | **规则分流** | 支持直连白名单与强制代理列表，支持 `*.example.com` 通配；loopback 永不代理。 |
-| **子进程代理注入** | 激活时向工具派生的子进程注入 `HTTP_PROXY` / `HTTPS_PROXY` / `ALL_PROXY`（含小写形式），关闭时同步清理。 |
+| **子进程代理注入** | 激活时向宿主与工具派生的子进程注入 `HTTP_PROXY` / `HTTPS_PROXY` / `ALL_PROXY` / `PI_PROXY`（含小写形式），关闭时同步清理。 |
 | **多语言** | 内置简体中文与英文两套提示；支持 `/proxy lang zh|en|auto` 即时切换，`auto` 跟随系统 locale。 |
 | **状态栏指示** | 代理激活时在 OMP 状态栏显示 `● PROXY ON`，关闭或降级直连时自动清除。 |
 | **无遥测** | 除代理转发与本地 TCP 探测外，不发起额外网络请求，不上报任何配置或使用数据。 |
@@ -149,12 +149,13 @@ omp plugin install github:Summe-rsnow/omp-proxy-mumu
   "enabled": false,
   "url": "http://127.0.0.1:7890",
   "injectChildEnv": true,
-  "probeTimeoutMs": 800,
+  "probeTimeoutMs": 1500,
   "lang": "auto",
   "rules": {
     "direct": [],
     "proxy": []
-  }
+  },
+  "directFallback": false
 }
 ```
 
@@ -163,10 +164,11 @@ omp plugin install github:Summe-rsnow/omp-proxy-mumu
 | `enabled` | `false` | 总开关。开启不等于生效，仍需地址有效且探测成功。 |
 | `url` | `"http://127.0.0.1:7890"` | 代理地址，例如 `http://127.0.0.1:7890`、`socks5://127.0.0.1:10808`。 |
 | `injectChildEnv` | `true` | 激活时是否向子进程注入代理环境变量。 |
-| `probeTimeoutMs` | `800` | TCP 探测超时，单位毫秒。 |
+| `probeTimeoutMs` | `1500` | TCP 探测超时，单位毫秒。 |
 | `lang` | `"auto"` | 提示语言：`"zh"`、`"en"` 或 `"auto"`（跟随系统 locale）。 |
 | `rules.direct` | `[]` | 直连白名单。命中后即使位于代理列表也不代理。 |
 | `rules.proxy` | `[]` | 强制代理列表。非空时，未命中的域名改为直连。 |
+| `directFallback` | `false` | 代理请求失败时是否回退原生直连。默认为 `false`（防 IP 泄露与地域拦截），仅在非受限网络建议开启。 |
 
 规则匹配支持精确域名与 `*.` 通配：
 

@@ -42,6 +42,7 @@ const MESSAGES = {
     statusChildEnv: "子进程环境变量注入",
     statusDirectRules: "直连白名单规则",
     statusProxyRules: "强制代理规则",
+    statusDirectFallback: "失败回退直连",
     statusLastProbe: "最近连通探测",
     statusLastError: "降级原因",
     stateActive: "已激活 (经代理转发)",
@@ -65,6 +66,7 @@ const MESSAGES = {
     proxyFallback: "经代理 {url} 的请求失败 ({error})，已自动回退原生直连。请执行 /proxy test 检查代理。",
     bridgeFailure: "SOCKS5 桥接失败 (HTTP {status})",
     proxyAndDirectFailed: "代理 {url} 请求失败 ({error})，回退原生直连也失败 ({directError})。请检查代理软件与网络连接。",
+    proxyFailed: "代理 {url} 请求失败 ({error})。已阻止直接回退以防地域拦截或 IP 泄露，请检查代理软件与节点。",
     proxyBodyNotReplayable: "经代理 {url} 的请求失败 ({error})，该请求体不可重放，已直接报错以避免重复提交。",
 
     offSuccess: "已关闭代理，恢复原生直连，并已清理子进程代理环境变量",
@@ -114,6 +116,7 @@ const MESSAGES = {
     statusChildEnv: "Child Process Env Injection",
     statusDirectRules: "Direct Rules (Bypass)",
     statusProxyRules: "Force Proxy Rules",
+    statusDirectFallback: "Direct Fallback",
     statusLastProbe: "Last Probe",
     statusLastError: "Downgrade Reason",
     stateActive: "ACTIVE (Routed via Proxy)",
@@ -137,6 +140,7 @@ const MESSAGES = {
     proxyFallback: "Request via proxy {url} failed ({error}); fell back to native direct. Run /proxy test to check the proxy.",
     bridgeFailure: "SOCKS5 bridge failure (HTTP {status})",
     proxyAndDirectFailed: "Proxy {url} failed ({error}) and the native direct retry failed too ({directError}). Check the proxy app and the network.",
+    proxyFailed: "Proxy {url} request failed ({error}). Direct fallback blocked to prevent location restriction or IP leak.",
     proxyBodyNotReplayable: "Request via proxy {url} failed ({error}); the body is not replayable, so it was not retried to avoid duplicate submission.",
 
     offSuccess: "Proxy disabled. Native direct connection restored and child process env cleared.",

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.2
+
+- 修复：增加对 `PI_PROXY` / `pi_proxy` 环境变量的同步注入与清理。Oh My Pi 核心体系（如 Anthropic `coworkFetch` 及 `transportFetch`）仅认 `PI_PROXY`；此前漏设导致 Anthropic 强制通过原生 `https.request` 裸连直连，完全绕过代理插件。
+- 修复：关闭默认失败回退直连（`directFallback: false`）。此前代理请求稍有超时即自动回退直连，导致真实国内 IP 直连 Google/OpenAI，引发 Google 400（`User location is not supported for the API use`）及双重超时。现默认失败直接报错，不向受限区域裸连。
+- 修复：调用方信号已中止（`signal.aborted`，如 prewarm 或客户端提前超时）时，直接抛出异常，不再执行无意义的直连重试。
+- 优化：探测默认超时时间由 800ms 调整为 1500ms，降低本地高负载时的误判不可达率。
+
 ## 0.2.1
 
 - 修复：环境里残留 socks 或格式错误的 `HTTP_PROXY` / `HTTPS_PROXY` / `ALL_PROXY` 会让 Bun `fetch` 对所有请求抛 `UnsupportedProxyProtocol`（“Retry failed after 1 attempts”）。插件安装 Hook 时快照并清理这类值，会话开始时告警一次，卸载或关闭时只恢复可用的原值。

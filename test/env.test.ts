@@ -53,15 +53,18 @@ describe("inherited proxy env sanitation", () => {
     process.env.HTTP_PROXY = "http:://127.0.0.1:7890";
     process.env.ALL_PROXY = "socks5://127.0.0.1:1080";
     process.env.HTTPS_PROXY = "http://127.0.0.1:7890";
+    process.env.PI_PROXY = "socks5://127.0.0.1:1080";
 
     const issues = sanitizeInheritedProxyEnv();
 
     expect(process.env.HTTP_PROXY).toBeUndefined();
     expect(process.env.ALL_PROXY).toBeUndefined();
+    expect(process.env.PI_PROXY).toBeUndefined();
     expect(process.env.HTTPS_PROXY).toBe("http://127.0.0.1:7890");
-    expect(issues).toEqual([
-      { key: "HTTP_PROXY", value: "http:://127.0.0.1:7890", reason: "malformed" },
+    expect(issues.sort((a, b) => a.key.localeCompare(b.key))).toEqual([
       { key: "ALL_PROXY", value: "socks5://127.0.0.1:1080", reason: "unsupported-scheme" },
+      { key: "HTTP_PROXY", value: "http:://127.0.0.1:7890", reason: "malformed" },
+      { key: "PI_PROXY", value: "socks5://127.0.0.1:1080", reason: "unsupported-scheme" },
     ]);
   });
 
@@ -72,9 +75,12 @@ describe("inherited proxy env sanitation", () => {
 
     applyProxyEnv("http://127.0.0.1:8080");
     expect(process.env.https_proxy).toBe("http://127.0.0.1:8080");
+    expect(process.env.PI_PROXY).toBe("http://127.0.0.1:8080");
+    expect(process.env.pi_proxy).toBe("http://127.0.0.1:8080");
 
     restoreProxyEnv();
     expect(process.env.HTTPS_PROXY).toBe("http://127.0.0.1:7890");
+    expect(process.env.PI_PROXY).toBeUndefined();
     expect(process.env.ALL_PROXY).toBeUndefined();
   });
 
