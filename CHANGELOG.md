@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.3
+
+- 宿主基线对齐 Oh My Pi 18.18.6（从 18.16.0 升级）；`peerDependencies` 仍为 `>=18.0.4 <19`。
+- 开发依赖 `@oh-my-pi/pi-coding-agent` 升级至 `18.18.6`；插件运行时代码无改动，34 项测试在 18.18.6 上全部通过。
+
 ## 0.2.2
 
 - 修复：增加对 `PI_PROXY` / `pi_proxy` 环境变量的同步注入与清理。Oh My Pi 核心体系（如 Anthropic `coworkFetch` 及 `transportFetch`）仅认 `PI_PROXY`；此前漏设导致 Anthropic 强制通过原生 `https.request` 裸连直连，完全绕过代理插件。
